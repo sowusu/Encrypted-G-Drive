@@ -10,8 +10,8 @@ Once `credentials.json` file has been created by google drive api, update it as 
 {
     "installed": {...},
     "virtru": {
-        "app_id": "50395bc5-1dc0-4b6f-9d36-ccf6c14df395",
-        "email": "s.owusu45@gmail.com"
+        "app_id": "app_id_from_virtru_dashboard",
+        "email": "login_email_to_virtru_dashboard"
     }
 }
 ```
