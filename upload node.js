@@ -36,6 +36,29 @@ function authorize(credentials, callback) {
 }
 
 /**
+ * Lists the names and IDs of up to 10 files.
+ * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
+ */
+function listFiles(auth) {
+  const drive = google.drive({version: 'v3', auth});
+  drive.files.list({
+    pageSize: 10,
+    fields: 'nextPageToken, files(id, name)',
+  }, (err, res) => {
+    if (err) return console.log('The API returned an error: ' + err);
+    const files = res.data.files;
+    if (files.length) {
+      console.log('Files:');
+      files.map((file) => {
+        console.log(`${file.name} (${file.id})`);
+      });
+    } else {
+      console.log('No files found.');
+    }
+  });
+}
+
+/**
  * Get and store new token after prompting for user authorization, and then
  * execute the given callback with the authorized OAuth2 client.
  * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
@@ -68,16 +91,17 @@ function getAccessToken(oAuth2Client, callback) {
 
 
 function uploadFile(auth){
+  var folderId = '1AxGsisAfHSYeZQ8-rO5Ybf35aEpe_ouE';
   const drive = google.drive({version: 'v3', auth});
   var fileMetadata = {
-  'name': 'cat.jpg'
+  'name': 'cat.jpg',
+  parents: [folderId]
 };
 var media = {
   mimeType: 'image/jpeg',
   body: fs.createReadStream('cat.jpg')
 };
 drive.files.create({
-  auth: auth,
   resource: fileMetadata,
   media: media,
   fields: 'id'
@@ -86,7 +110,7 @@ drive.files.create({
     // Handle error
     console.log(err);
   } else {
-    console.log('File Id: ', file.id);
+    console.log('File Id: ', file.data.id);
   }
 });
 }
