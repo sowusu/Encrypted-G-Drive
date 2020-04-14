@@ -10,12 +10,33 @@ const SCOPES = ['https://www.googleapis.com/auth/drive'];
 // time.
 const TOKEN_PATH = 'token.json';
 
-// Load client secrets from a local file.
-fs.readFile('credentials.json', (err, content) => {
-  if (err) return console.log('Error loading client secret file:', err);
-  // Authorize a client with credentials, then call the Google Drive API.
-  authorize(JSON.parse(content), uploadFile);
-});
+/*
+Get commandline variable as  - node "upload\ node.js" <operation>['encrypt'|'decrypt'] <filename>
+*/
+const operation = process.argv[2];
+const filename = process.argv[3];
+
+if (operation === "encrypt"){
+    // Load client secrets from a local file.
+  fs.readFile('credentials.json', (err, content) => {
+    if (err) return console.log('Error loading client secret file:', err);
+    // Authorize a client with credentials, then call the Google Drive API.
+    authorize(JSON.parse(content), encryptAndUploadFile);
+  });
+}
+else if (operation === "decrypt"){
+  console.log("decrypting...");
+  fs.readFile('credentials.json', (err, content) => {
+    if (err) return console.log('Error loading client secret file:', err);
+    // Authorize a client with credentials, then call the Google Drive API.
+    authorize(JSON.parse(content), downloadAndDecryptFile);
+  });
+}
+else{
+  console.log("Check: Make sure argv[2] is either 'encrypt' or 'decrypt'");
+  process.exit();
+}
+
 
 /**
  * Create an OAuth2 client with the given credentials, and then execute the
@@ -107,7 +128,45 @@ async function encrypt(filename, virtru_app) {
 }
 
 
-function uploadFile(auth, virtru_app){
+function encryptAndUploadFile(auth, virtru_app){
+  const fileToEncryptName = "cat.jpg";
+
+  const promise = encrypt(fileToEncryptName, virtru_app);
+  promise.then(() => 
+  {
+    console.log(`File, ${fileToEncryptName} has been encrypted and written to ${fileToEncryptName}.tdf3.html!`)
+
+    //var folderId = '1AxGsisAfHSYeZQ8-rO5Ybf35aEpe_ouE';
+    const drive = google.drive({version: 'v3', auth});
+    const encrypteFileName = `${fileToEncryptName}.tdf3.html`;
+    var fileMetadata = {
+    'name': encrypteFileName
+    //,parents: [folderId]
+  };
+  var media = {
+    mimeType: 'image/jpeg',
+    body: fs.createReadStream(encrypteFileName)
+  };
+  drive.files.create({
+    resource: fileMetadata,
+    media: media,
+    fields: 'id'
+  }, function (err, file) {
+    if (err) {
+      // Handle error
+      console.log(err);
+    } else {
+      console.log('File Id: ', file.data.id);
+    }
+  });
+
+
+  });
+
+  
+}
+
+function downloadAndDecryptFile(auth, virtru_app){
   const fileToEncryptName = "cat.jpg";
 
   const promise = encrypt(fileToEncryptName, virtru_app);
