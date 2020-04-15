@@ -14,22 +14,21 @@ const TOKEN_PATH = 'token.json';
 Get commandline variable as  - node "upload\ node.js" <operation>['encrypt'|'decrypt'] <filename>
 */
 const operation = process.argv[2];
-const filename = process.argv[3];
+const fileName = process.argv[3];
 
 if (operation === "encrypt"){
     // Load client secrets from a local file.
   fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
     // Authorize a client with credentials, then call the Google Drive API.
-    authorize(JSON.parse(content), encryptAndUploadFile);
+    authorize(JSON.parse(content), encryptAndUploadFile, fileName);
   });
 }
 else if (operation === "decrypt"){
-  console.log("decrypting...");
   fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
     // Authorize a client with credentials, then call the Google Drive API.
-    authorize(JSON.parse(content), downloadAndDecryptFile);
+    authorize(JSON.parse(content), downloadAndDecryptFile, fileName);
   });
 }
 else{
@@ -44,7 +43,7 @@ else{
  * @param {Object} credentials The authorization client credentials.
  * @param {function} callback The callback to call with the authorized client.
  */
-function authorize(credentials, callback) {
+function authorize(credentials, callback, fileName) {
   const {client_secret, client_id, redirect_uris} = credentials.installed;
   const virtru_app = credentials.virtru;
   const oAuth2Client = new google.auth.OAuth2(
@@ -52,32 +51,9 @@ function authorize(credentials, callback) {
 
   // Check if we have previously stored a token.
   fs.readFile(TOKEN_PATH, (err, token) => {
-    if (err) return getAccessToken(oAuth2Client, callback, virtru_app);
+    if (err) return getAccessToken(oAuth2Client, callback, virtru_app, fileName);
     oAuth2Client.setCredentials(JSON.parse(token));
-    callback(oAuth2Client, virtru_app);
-  });
-}
-
-/**
- * Lists the names and IDs of up to 10 files.
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- */
-function listFiles(auth) {
-  const drive = google.drive({version: 'v3', auth});
-  drive.files.list({
-    pageSize: 10,
-    fields: 'nextPageToken, files(id, name)',
-  }, (err, res) => {
-    if (err) return console.log('The API returned an error: ' + err);
-    const files = res.data.files;
-    if (files.length) {
-      console.log('Files:');
-      files.map((file) => {
-        console.log(`${file.name} (${file.id})`);
-      });
-    } else {
-      console.log('No files found.');
-    }
+    callback(oAuth2Client, virtru_app, fileName);
   });
 }
 
@@ -87,7 +63,7 @@ function listFiles(auth) {
  * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
  * @param {getEventsCallback} callback The callback for the authorized client.
  */
-function getAccessToken(oAuth2Client, callback, virtru_app) {
+function getAccessToken(oAuth2Client, callback, virtru_app, fileName) {
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
@@ -107,7 +83,7 @@ function getAccessToken(oAuth2Client, callback, virtru_app) {
         if (err) return console.error(err);
         console.log('Token stored to', TOKEN_PATH);
       });
-      callback(oAuth2Client, virtru_app);
+      callback(oAuth2Client, virtru_app, fileName);
     });
   });
 }
@@ -128,9 +104,7 @@ async function encrypt(filename, virtru_app) {
 }
 
 
-function encryptAndUploadFile(auth, virtru_app){
-  const fileToEncryptName = "cat.jpg";
-
+function encryptAndUploadFile(auth, virtru_app, fileToEncryptName){
   const promise = encrypt(fileToEncryptName, virtru_app);
   promise.then(() => 
   {
@@ -166,40 +140,67 @@ function encryptAndUploadFile(auth, virtru_app){
   
 }
 
-function downloadAndDecryptFile(auth, virtru_app){
-  const fileToEncryptName = "cat.jpg";
+function downloadAndDecryptFile(auth, virtru_app, fileToDecrypt){
+  const email = virtru_app.email;
+  const appId = virtru_app.app_id;
+  // Initialize the client.
+  const client = new Virtru.Client({email, appId});
 
-  const promise = encrypt(fileToEncryptName, virtru_app);
-  promise.then(() => 
-  {
-    console.log(`File, ${fileToEncryptName} has been encrypted and written to ${fileToEncryptName}.tdf3.html!`)
+  const decryptedFile = "decrypted_" + fileToDecrypt.split(".tdf3")[0];
+  const drive = google.drive({version: 'v3', auth});
+  let fileToDecryptID = "";
+  /*function to get the file id of a file on gdrive
+  using the filename */
+  drive.files.list({
+    pageSize: 10,
+    fields: 'nextPageToken, files(id, name)',
+  }, (err, res) => {
+    if (err) return console.log('The API returned an error: ' + err);
+    const files = res.data.files;
+    if (files.length) {
+      const matches = files.filter((file) => file.name === fileToDecrypt);
+      //console.log(matches);
+      if (matches.length){
+        //uses first match
+        var dest = fs.createWriteStream(fileToDecrypt);
+        fileToDecryptID = matches[0].id;
+        console.log(fileToDecryptID);
 
-    //var folderId = '1AxGsisAfHSYeZQ8-rO5Ybf35aEpe_ouE';
-    const drive = google.drive({version: 'v3', auth});
-    const encrypteFileName = `${fileToEncryptName}.tdf3.html`;
-    var fileMetadata = {
-    'name': encrypteFileName
-    //,parents: [folderId]
-  };
-  var media = {
-    mimeType: 'image/jpeg',
-    body: fs.createReadStream(encrypteFileName)
-  };
-  drive.files.create({
-    resource: fileMetadata,
-    media: media,
-    fields: 'id'
-  }, function (err, file) {
-    if (err) {
-      // Handle error
-      console.log(err);
-    } else {
-      console.log('File Id: ', file.data.id);
+        drive.files.get({                    // Begin download request for file by ID.
+          fileId: fileToDecryptID,
+          alt: 'media'
+        }, {
+          responseType: 'stream'
+        }, function(err, res) {
+          res.data
+            .on('end', () => {
+              console.log('Download of file: ' + fileToDecrypt + ' with file id: ' + fileToDecryptID + ' is complete.');
+              /*decrypt downloaded file*/
+
+              // prepare
+              const decryptParams = new Virtru.DecryptParamsBuilder()
+              .withFileSource(fileToDecrypt)
+              .build();
+
+              // access & output
+              client.decrypt(decryptParams).then(function(plaintextStream){
+                plaintextStream
+                .toFile(decryptedFile)
+                .then(() => console.log(`Decrypted file: ${decryptedFile}`));
+              });
+              
+              })
+              .on('error', err => {
+                console.log(err);
+              })
+              .pipe(dest);
+
+          });
+
+      }
+      else console.log("File not in gdrive"); 
     }
+    else console.log("File not in gdrive"); 
   });
-
-
-  });
-
   
 }

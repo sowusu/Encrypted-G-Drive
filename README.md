@@ -1,6 +1,12 @@
 # Encrypted-G-Drive
 Project to encrypt files stored in Google Drive
 
+## Running node app
+Run node app using command below:
+
+```
+node secure-file-gdrive.js [encrypt|decrypt] <file_to_encrypt_or_decrypt>
+```
 
 ## Setting up Virtru credentials
 
